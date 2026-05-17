@@ -1,0 +1,76 @@
+```{r}
+library(ggplot2)
+library(reshape2)
+library(car)
+```
+
+```{r}
+# Data load and prep
+cars_df <- car_price_dataset
+cars_df$Car_ID <- NULL
+
+cars_df$Brand <- as.factor(cars_df$Brand)
+cars_df$Fuel_Type <- as.factor(cars_df$Fuel_Type)
+cars_df$Transmission <- as.factor(cars_df$Transmission)
+```
+
+```{r}
+# Train and test split
+set.seed(42)
+train_idx <- sample(seq_len(nrow(cars_df)), 0.8 * nrow(cars_df))
+train_set <- cars_df[train_idx, ]
+test_set <- cars_df[-train_idx, ]
+```
+
+```{r}
+# Correlation matrix creation
+num_vars <- sapply(train_set, is.numeric)
+cor_matrix <- cor(train_set[, num_vars])
+
+ggplot(melt(cor_matrix), aes(Var1, Var2, fill=value)) +
+  geom_tile(color="white") +
+  scale_fill_gradient2(low="darkred", high="darkgreen", mid="white", midpoint=0) +
+  geom_text(aes(label=round(value, 2)), size=3) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=45, hjust=1), axis.title = element_blank()) +
+  ggtitle("Predictor Correlation Matrix")
+```
+
+
+```{r}
+# Baseline Models
+mod_base1 <- lm(Price ~ Mileage + Model_Year, data=train_set)
+mod_base2 <- lm(Price ~ Mileage + Model_Year + Engine_Size + Horsepower, data=train_set)
+```
+
+```{r}
+# VIF check
+vif(mod_base2)
+```
+
+```{r}
+# Enhanced Models
+mod_enh1 <- lm(Price ~ Mileage + Model_Year + Engine_Size + Horsepower + Owner_Count, data=train_set)
+mod_enh2 <- lm(Price ~ Mileage + Model_Year + Engine_Size * Horsepower + I(Mileage^2), data=train_set)
+```
+
+```{r}
+# Model comparison
+AIC(mod_base1, mod_base2, mod_enh1, mod_enh2)
+summary(mod_enh1)$adj.r.squared
+summary(mod_enh2)$adj.r.squared
+```
+
+```{r}
+# Diagnostic plots for the enhanced model 1
+par(mfrow=c(2,2))
+plot(mod_enh1)
+```
+
+```{r}
+# Test set evaluation
+preds <- predict(mod_enh1, newdata=test_set)
+rmse <- sqrt(mean((test_set$Price - preds)^2))
+cat("Test RMSE:", rmse, "\n")
+```
+
